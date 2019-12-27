@@ -20,6 +20,7 @@ from jltc.models import Configuration, Project, Test, TestData
 dateconv = np.vectorize(datetime.datetime.fromtimestamp)
 logger = logging.getLogger(__name__)
 
+
 class ProjectGraphiteSettings(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     name = models.CharField(max_length=1000, default="")
@@ -313,7 +314,7 @@ class LoadGenerator(models.Model):
         return {'status': status, 'reason': reason}
 
     def refresh(self):
-        """SSH to loadgenerator and gether system data
+        """SSH to loadgenerator and gather system data
         """
 
         logger.info('Refresh loadgenerator data: %s', self.hostname)
@@ -345,23 +346,62 @@ class LoadGenerator(models.Model):
         self.active = True
         self.save()
 
-
     class Meta:
         db_table = 'load_generator'
 
 
-class JmeterInstance(models.Model):
-    test_running = models.ForeignKey(TestRunning, on_delete=models.CASCADE)
-    load_generator = models.ForeignKey(LoadGenerator, on_delete=models.CASCADE)
+class JmeterServer(models.Model):
+    test = models.ForeignKey(
+        Test, on_delete=models.DO_NOTHING
+    )
+    loadgenerator = models.ForeignKey(
+        LoadGenerator, on_delete=models.DO_NOTHING
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.DO_NOTHING
+    )
     pid = models.IntegerField(default=0)
     port = models.IntegerField(default=0)
-    jmeter_dir = models.CharField(max_length=300, default="")
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    threads_number = models.IntegerField(default=0)
-    java_args = models.CharField(max_length=1000, default="")
+    jmeter_dir = models.TextField(default='')
+    threads = models.IntegerField(default=0)
+    java_args = models.TextField(default='')
 
-    class Meta:
-        db_table = 'jmeter_instance'
+    def java_args(self, memory):
+        """Generate Java arg string for a new Jmeter server
+
+        Args:
+            memory (int): expected memory
+
+        Returns:
+            str: java args string
+        """
+
+        java_args = [
+            '-server',
+            '-Xms{}m',
+            '-Xmx{}m',
+            '-Xss228k',
+            '-XX:+DisableExplicitGC',
+            '-XX:+CMSClassUnloadingEnabled',
+            '-XX:+UseCMSInitiatingOccupancyOnly',
+            '-XX:CMSInitiatingOccupancyFraction=70',
+            '-XX:+ScavengeBeforeFullGC',
+            '-XX:+CMSScavengeBeforeRemark',
+            '-XX:+UseConcMarkSweepGC',
+            '-XX:+CMSParallelRemarkEnabled',
+            '-Djava.net.preferIPv6Addresses=true',
+            '-Djava.net.preferIPv4Stack=false'
+        ]
+        return ' '.join(java_args).format(memory)
+
+    def start(self, memory):
+
+        required_memory_for_jri, required_memory_for_jri)
+
+
+class JmeterServerData(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    data = JSONField()
 
 
 class ActivityLog(models.Model):
@@ -372,14 +412,6 @@ class ActivityLog(models.Model):
 
     class Meta:
         db_table = 'activity_log'
-
-
-class JmeterInstanceStatistic(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    data = JSONField()
-
-    class Meta:
-        db_table = 'jmeter_instance_statistic'
 
 
 class JMeterTestPlanParameter(models.Model):
